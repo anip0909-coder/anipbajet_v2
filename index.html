@@ -55,6 +55,26 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
 @media(min-width:481px) and (max-width:599px){.cat-circle{width:70px;height:70px}}
 .app{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 .bottom{padding-bottom:calc(9px + env(safe-area-inset-bottom))}
+
+.sub-item{padding:13px 0;border-bottom:1px solid var(--line)}
+.sub-item:last-child{border-bottom:0}
+.sub-top{display:flex;align-items:center;gap:8px}
+.sub-name{flex:1;font-size:14px;font-weight:700}
+.sub-amt{font-size:12px;color:var(--muted);text-align:right}
+.sub-amt b{color:var(--text);font-size:13px}
+.sbar{height:8px;background:#eeeef5;border-radius:99px;overflow:hidden;margin-top:8px}
+.sbar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#6c63ff,#9a94ff)}
+.sbar i.over{background:linear-gradient(90deg,#f05d68,#ff8a92)}
+.sub-meta{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:5px}
+.sub-meta .over{color:var(--red);font-weight:700}
+.icon-btn{background:#f1f1f6;border-radius:10px;width:34px;height:34px;font-size:15px;flex:none}
+.edit-box{display:none;gap:8px;margin-top:10px;align-items:center}
+.edit-box.show{display:flex}
+.edit-box input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:12px;outline:none}
+.edit-box .ok{background:var(--primary);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800}
+.edit-box .del{background:#fdecee;color:var(--red);border-radius:12px;padding:10px 12px;font-weight:800}
+.alloc{font-size:12px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.alloc b{color:var(--text)}
 @media(min-width:481px){body{padding:15px 0}.app{border-radius:24px;overflow:hidden;box-shadow:0 15px 50px rgba(30,30,60,.08)}}
 </style>
 </head>
@@ -101,7 +121,7 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
       <div class="legend"><div><span class="dot purple"></span>Perbelanjaan <b id="legendSpent">0%</b></div><div><span class="dot gray"></span>Baki <b id="legendRemain">0%</b></div><div style="margin-top:8px;color:var(--muted)">Jumlah bajet<br><b style="color:var(--text);font-size:15px" id="legendBudget">RM 0.00</b></div></div>
     </div>
   </div>
-  <div class="section-title"><h3>Kategori Perbelanjaan</h3><span class="mini-note">Klik kategori</span></div>
+  <div class="section-title"><h3>Kategori Perbelanjaan</h3><span class="mini-note">Tekan kategori untuk set bajet</span></div>
   <div class="card" id="categoryList"></div>
 </section>
 
@@ -186,6 +206,8 @@ const categories = {
 let state = JSON.parse(localStorage.getItem("familyBudgetData") || "null") || {
   password:"1234", salary:5000, records:[], maintenance:[], health:[]
 };
+if(!state.budgets)state.budgets={};
+let currentCat=null;
 let selectedMonth = new Date().getMonth();
 let selectedYear = new Date().getFullYear();
 
@@ -228,13 +250,16 @@ function renderCategories(){
   let html='<div class="cat-grid">';
   Object.entries(categories).forEach(([name,c])=>{
     const amount=expenses.filter(r=>r.category===name).reduce((s,r)=>s+Number(r.amount),0);
+    const cb=catBudget(name);
     html+=`<button class="cat-tile ${amount>0?'has':''}" onclick="openCategory('${name.replace(/'/g,"\\'")}')">
       <div class="cat-circle">${c.icon}</div>
       <div class="cat-label">${name}</div>
-      <div class="cat-sum">${money(amount)}</div>
+      <div class="cat-sum" style="${cb&&amount>cb?'color:var(--red)':''}">${money(amount)}${cb?' / '+Math.round(cb).toLocaleString('ms-MY'):''}</div>
     </button>`;
   });
   html+='</div>';
+  const al=totalAllocated(), sal=currentSalary();
+  html+=`<div class="alloc">Bajet diperuntukkan: <b>${money(al)}</b>${sal?` (${(al/sal*100).toFixed(1)}% daripada gaji)`:''} · ${al>sal&&sal?'<span style="color:var(--red);font-weight:700">melebihi gaji '+money(al-sal)+'</span>':'Belum diagih: <b>'+money(Math.max(0,sal-al))+'</b>'}</div>`;
   document.getElementById("categoryList").innerHTML=html;
 }
 function recordHtml(r){
@@ -246,17 +271,51 @@ function renderRecords(){
   document.getElementById("recentRecords").innerHTML=arr.length?arr.slice(0,5).map(recordHtml).join(""):`<div class="empty">Belum ada rekod untuk bulan ini.</div>`;
   document.getElementById("allRecords").innerHTML=arr.length?arr.map(recordHtml).join(""):`<div class="empty">Belum ada rekod.</div>`;
 }
+function bKey(cat,sub){return cat+"||"+sub}
+function getBudget(cat,sub){return Number(state.budgets[bKey(cat,sub)])||0}
+function catBudget(cat){return categories[cat].subs.reduce((s,x)=>s+getBudget(cat,x),0)}
+function totalAllocated(){return Object.keys(categories).reduce((s,c)=>s+catBudget(c),0)}
 function openCategory(name){
+  currentCat=name;
   const expenses=currentExpenses().filter(r=>r.category===name);
   const c=categories[name]; const total=expenses.reduce((s,r)=>s+Number(r.amount),0);
+  const cb=catBudget(name);
   document.getElementById("modalIcon").textContent=c.icon;
   document.getElementById("modalTitle").textContent=name;
-  const _p=currentSalary()?(total/currentSalary()*100).toFixed(1):"0.0";document.getElementById("modalTotal").textContent="Jumlah kategori: "+money(total)+" ("+_p+"% daripada gaji)";
-  document.getElementById("modalItems").innerHTML=c.subs.map(sub=>{
+  document.getElementById("modalTotal").textContent="Guna "+money(total)+(cb?" / "+money(cb)+" ("+(total/cb*100).toFixed(1)+"%)":" · bajet belum ditetapkan");
+  document.getElementById("modalItems").innerHTML=c.subs.map((sub,i)=>{
     const sum=expenses.filter(r=>r.note===sub).reduce((s,r)=>s+Number(r.amount),0);
-    return `<div class="subcat"><span>${sub}</span><b>${money(sum)}</b></div>`;
+    const bud=getBudget(name,sub);
+    const pct=bud?sum/bud*100:0;
+    const over=bud&&sum>bud;
+    const meta=bud
+      ?`<div class="sub-meta"><span class="${over?'over':''}">${pct.toFixed(1)}% daripada bajet</span><span class="${over?'over':''}">${over?'Lebih '+money(sum-bud):'Baki '+money(bud-sum)}</span></div>`
+      :`<div class="sub-meta"><span>Tiada bajet · tekan ✎ untuk tetapkan</span></div>`;
+    return `<div class="sub-item">
+      <div class="sub-top"><span class="sub-name">${sub}</span>
+        <div class="sub-amt"><b>${money(sum)}</b><br>${bud?'/ '+money(bud):'/ —'}</div>
+        <button class="icon-btn" onclick="toggleEdit(${i})" aria-label="Edit bajet">✎</button></div>
+      <div class="sbar"><i class="${over?'over':''}" style="width:${Math.min(100,pct)}%"></i></div>
+      ${meta}
+      <div class="edit-box" id="edit${i}">
+        <input type="number" inputmode="decimal" min="0" step="0.01" id="bud${i}" placeholder="Bajet bulanan (RM)" value="${bud||''}">
+        <button class="ok" onclick="saveBudget(${i})">Simpan</button>
+        ${bud?`<button class="del" onclick="deleteBudget(${i})">Padam</button>`:''}
+      </div></div>`;
   }).join("");
   document.getElementById("categoryModal").classList.add("show");
+}
+function toggleEdit(i){const e=document.getElementById("edit"+i);e.classList.toggle("show");if(e.classList.contains("show"))document.getElementById("bud"+i).focus()}
+function saveBudget(i){
+  const sub=categories[currentCat].subs[i];
+  const v=Number(document.getElementById("bud"+i).value);
+  if(!(v>0)){toast("Masukkan nilai bajet lebih daripada 0, atau tekan Padam.");return}
+  state.budgets[bKey(currentCat,sub)]=v;save();toast("Bajet "+sub+" disimpan.");renderAll();openCategory(currentCat);
+}
+function deleteBudget(i){
+  const sub=categories[currentCat].subs[i];
+  if(!confirm("Padam bajet untuk "+sub+"?"))return;
+  delete state.budgets[bKey(currentCat,sub)];save();toast("Bajet "+sub+" dipadam.");renderAll();openCategory(currentCat);
 }
 function closeModal(){document.getElementById("categoryModal").classList.remove("show")}
 function addRecord(){
