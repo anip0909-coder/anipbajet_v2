@@ -75,6 +75,21 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
 .edit-box .del{background:#fdecee;color:var(--red);border-radius:12px;padding:10px 12px;font-weight:800}
 .alloc{font-size:12px;color:var(--muted);margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .alloc b{color:var(--text)}
+
+.edit-box.show{flex-direction:column;align-items:stretch}
+.edit-row{display:flex;gap:8px;align-items:center}
+.edit-row label{font-size:11px;color:var(--muted);font-weight:700;width:74px;flex:none}
+.edit-box .ghost{background:#f1f1f6;color:var(--text);border-radius:12px;padding:10px 12px;font-weight:700}
+.edit-actions{display:flex;gap:8px;flex-wrap:wrap}
+.edit-actions button{flex:1;min-width:90px;font-size:12px}
+.add-sub{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+.add-sub input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;outline:none}
+.add-sub button{background:var(--primary);color:#fff;border-radius:12px;padding:10px 14px;font-weight:800}
+.sav-line{display:flex;justify-content:space-between;font-size:12px;margin-top:6px;color:var(--muted)}
+.sav-line b{color:#1f9c68}
+.orphan{font-size:12px;color:var(--muted);padding:10px 0}
+.sav-card{display:flex;align-items:center;gap:12px;cursor:pointer}
+.sav-card .cat-icon{width:44px;height:44px}
 @media(min-width:481px){body{padding:15px 0}.app{border-radius:24px;overflow:hidden;box-shadow:0 15px 50px rgba(30,30,60,.08)}}
 </style>
 </head>
@@ -106,6 +121,7 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
     <div class="stat"><div class="icon">🧾</div><div class="label">Jumlah perbelanjaan</div><div class="value" id="spentVal">RM 0.00</div></div>
     <div class="stat"><div class="icon">💵</div><div class="label">Baki perbelanjaan</div><div class="value" id="balanceVal">RM 0.00</div></div>
   </div>
+  <div class="card sav-card" id="savingsCard" onclick="showPage('detail');openCategory('Simpanan')"></div>
   <div class="section-title"><h3>Ringkasan Bajet</h3><span class="link" onclick="showPage('detail')">Lihat detail</span></div>
   <div class="card"><div class="mini-note">Bajet digunakan berbanding jumlah gaji bersih.</div><div style="height:12px;background:#eeeef5;border-radius:99px;margin-top:12px;overflow:hidden"><div id="homeBar" class="fill" style="width:0"></div></div><div style="display:flex;justify-content:space-between;margin-top:7px;font-size:12px"><span id="homePercent">0%</span><span id="homeRemaining">RM 0.00 baki</span></div></div>
   <div class="section-title"><h3>Rekod Terkini</h3><span class="link" onclick="showPage('add')">+ Tambah</span></div>
@@ -128,8 +144,8 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
 <section class="page" id="add">
   <div class="page-title">Add Record</div>
   <div class="card form-card">
-    <label>Jenis Rekod</label><select id="recordType"><option value="expense">Perbelanjaan</option><option value="income">Pendapatan</option></select>
-    <label>Kategori</label><select id="recordCategory"></select>
+    <label>Jenis Rekod</label><select id="recordType" onchange="populateCategories()"><option value="expense">Perbelanjaan</option><option value="saving">Simpan Duit (masuk simpanan)</option><option value="withdraw">Keluar Duit Simpanan</option><option value="income">Pendapatan</option></select>
+    <label id="catLabel">Kategori</label><select id="recordCategory"></select>
     <label>Subkategori / Catatan</label><input id="recordNote" placeholder="Contoh: Bahan basah / bil elektrik">
     <label>Jumlah (RM)</label><input id="recordAmount" type="number" min="0" step="0.01" placeholder="0.00">
     <label>Tarikh</label><input id="recordDate" type="date">
@@ -194,7 +210,7 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
 <div class="toast" id="toast"></div>
 
 <script>
-const categories = {
+const defaultCategories = {
   "Komitmen":{icon:"👨‍👩‍👧‍👦",subs:["Family","Nafkah","PTPTN","Sekolah Anak","Google Storage"]},
   "Barang Dapur":{icon:"🛒",subs:["Bahan Kering","Bahan Basah"]},
   "Utiliti":{icon:"💡",subs:["Bills"]},
@@ -207,6 +223,9 @@ let state = JSON.parse(localStorage.getItem("familyBudgetData") || "null") || {
   password:"1234", salary:5000, records:[], maintenance:[], health:[]
 };
 if(!state.budgets)state.budgets={};
+if(!state.categories)state.categories=JSON.parse(JSON.stringify(defaultCategories));
+const categories=state.categories;
+function esc(t){return String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 let currentCat=null;
 let selectedMonth = new Date().getMonth();
 let selectedYear = new Date().getFullYear();
@@ -242,7 +261,7 @@ function renderAll(){
   document.getElementById("legendSpent").textContent=pct.toFixed(1)+"%";
   document.getElementById("legendRemain").textContent=(100-pct).toFixed(1)+"%";
   document.getElementById("donut").style.background=`conic-gradient(var(--primary) 0 ${pct}%,#e7e7f2 ${pct}% 100%)`;
-  renderCategories(); renderRecords(); renderMaintenance(); renderHealth();
+  renderCategories(); renderRecords(); renderMaintenance(); renderHealth(); renderSavings(); populateCategories();
   document.getElementById("salaryInput").value=salary;
 }
 function renderCategories(){
@@ -254,7 +273,7 @@ function renderCategories(){
     html+=`<button class="cat-tile ${amount>0?'has':''}" onclick="openCategory('${name.replace(/'/g,"\\'")}')">
       <div class="cat-circle">${c.icon}</div>
       <div class="cat-label">${name}</div>
-      <div class="cat-sum" style="${cb&&amount>cb?'color:var(--red)':''}">${money(amount)}${cb?' / '+Math.round(cb).toLocaleString('ms-MY'):''}</div>
+      <div class="cat-sum" style="${cb&&amount>cb&&name!=='Simpanan'?'color:var(--red)':''}">${money(amount)}${cb?' / '+Math.round(cb).toLocaleString('ms-MY'):''}</div>
     </button>`;
   });
   html+='</div>';
@@ -263,8 +282,13 @@ function renderCategories(){
   document.getElementById("categoryList").innerHTML=html;
 }
 function recordHtml(r){
-  const icon=r.type==="income"?"💵":(categories[r.category]?.icon||"🧾");
-  return `<div class="record"><div class="cat-icon">${icon}</div><div class="rtext"><b>${r.note||r.category||"Rekod"}${r.detail?" · "+r.detail:""}</b><small>${r.category||"Pendapatan"} · ${fmtDate(r.date)}</small></div><div class="amount" style="color:${r.type==="income"?"var(--green)":"var(--text)"}">${r.type==="income"?"+":"-"}${money(r.amount).replace("RM ","RM ")}</div></div>`;
+  const w=r.type==="withdraw", inc=r.type==="income", sv=r.type==="expense"&&r.category==="Simpanan";
+  const icon=inc?"💵":(w?"🏦":(categories[r.category]?.icon||"🧾"));
+  const title=esc((r.note||r.category||"Rekod")+(r.detail?" · "+r.detail:""));
+  const label=w?"Keluar simpanan":(sv?"Simpan ke akaun":(r.category||"Pendapatan"));
+  const sign=inc?"+":(w?"↩ ":(sv?"":"-"));
+  const color=inc?"var(--green)":(w?"var(--orange)":(sv?"var(--primary)":"var(--text)"));
+  return `<div class="record"><div class="cat-icon">${icon}</div><div class="rtext"><b>${title}</b><small>${esc(label)} · ${fmtDate(r.date)}</small></div><div class="amount" style="color:${color}">${sign}${money(r.amount)}</div></div>`;
 }
 function renderRecords(){
   const arr=state.records.filter(r=>monthYearKey(r.date)).sort((a,b)=>b.date.localeCompare(a.date));
@@ -275,62 +299,144 @@ function bKey(cat,sub){return cat+"||"+sub}
 function getBudget(cat,sub){return Number(state.budgets[bKey(cat,sub)])||0}
 function catBudget(cat){return categories[cat].subs.reduce((s,x)=>s+getBudget(cat,x),0)}
 function totalAllocated(){return Object.keys(categories).reduce((s,c)=>s+catBudget(c),0)}
+function sumOf(arr){return arr.reduce((s,r)=>s+Number(r.amount),0)}
+function savBalance(sub){
+  const dep=sumOf(state.records.filter(r=>r.type==="expense"&&r.category==="Simpanan"&&r.note===sub));
+  const wd=sumOf(state.records.filter(r=>r.type==="withdraw"&&r.note===sub));
+  return dep-wd;
+}
+function renderSavings(){
+  const dep=sumOf(state.records.filter(r=>r.type==="expense"&&r.category==="Simpanan"));
+  const wdAll=sumOf(state.records.filter(r=>r.type==="withdraw"));
+  const depM=sumOf(currentExpenses().filter(r=>r.category==="Simpanan"));
+  const wdM=sumOf(state.records.filter(r=>r.type==="withdraw"&&monthYearKey(r.date)));
+  document.getElementById("savingsCard").innerHTML=`<div class="cat-icon">🏦</div><div style="flex:1"><div class="mini-note">Jumlah simpanan</div><div style="font-size:19px;font-weight:800">${money(dep-wdAll)}</div></div><div class="sub-amt">Bulan ini<br><b style="color:#1f9c68">+${money(depM)}</b>${wdM?'<br><b style="color:var(--orange)">−'+money(wdM)+'</b>':''}</div>`;
+}
 function openCategory(name){
   currentCat=name;
+  const isSav=name==="Simpanan";
   const expenses=currentExpenses().filter(r=>r.category===name);
-  const c=categories[name]; const total=expenses.reduce((s,r)=>s+Number(r.amount),0);
+  const c=categories[name]; const total=sumOf(expenses);
   const cb=catBudget(name);
   document.getElementById("modalIcon").textContent=c.icon;
   document.getElementById("modalTitle").textContent=name;
-  document.getElementById("modalTotal").textContent="Guna "+money(total)+(cb?" / "+money(cb)+" ("+(total/cb*100).toFixed(1)+"%)":" · bajet belum ditetapkan");
-  document.getElementById("modalItems").innerHTML=c.subs.map((sub,i)=>{
-    const sum=expenses.filter(r=>r.note===sub).reduce((s,r)=>s+Number(r.amount),0);
+  document.getElementById("modalTotal").textContent=(isSav?"Disimpan ":"Guna ")+money(total)+(cb?" / "+money(cb)+" ("+(total/cb*100).toFixed(1)+"%)":" · bajet belum ditetapkan");
+  let html=c.subs.map((sub,i)=>{
+    const sum=sumOf(expenses.filter(r=>r.note===sub));
     const bud=getBudget(name,sub);
     const pct=bud?sum/bud*100:0;
-    const over=bud&&sum>bud;
+    const over=bud&&sum>bud&&!isSav;
     const meta=bud
-      ?`<div class="sub-meta"><span class="${over?'over':''}">${pct.toFixed(1)}% daripada bajet</span><span class="${over?'over':''}">${over?'Lebih '+money(sum-bud):'Baki '+money(bud-sum)}</span></div>`
+      ?`<div class="sub-meta"><span class="${over?'over':''}">${pct.toFixed(1)}% daripada ${isSav?'sasaran':'bajet'}</span><span class="${over?'over':''}">${sum>bud?(isSav?'Melebihi sasaran ':'Lebih ')+money(sum-bud):'Baki '+money(bud-sum)}</span></div>`
       :`<div class="sub-meta"><span>Tiada bajet · tekan ✎ untuk tetapkan</span></div>`;
+    let sav="";
+    if(isSav){
+      const wd=sumOf(state.records.filter(r=>r.type==="withdraw"&&r.note===sub&&monthYearKey(r.date)));
+      sav=`<div class="sav-line"><span>Baki simpanan${wd?' · keluar bulan ini '+money(wd):''}</span><b>${money(savBalance(sub))}</b></div>`;
+    }
     return `<div class="sub-item">
-      <div class="sub-top"><span class="sub-name">${sub}</span>
+      <div class="sub-top"><span class="sub-name">${esc(sub)}</span>
         <div class="sub-amt"><b>${money(sum)}</b><br>${bud?'/ '+money(bud):'/ —'}</div>
-        <button class="icon-btn" onclick="toggleEdit(${i})" aria-label="Edit bajet">✎</button></div>
+        <button class="icon-btn" onclick="toggleEdit(${i})" aria-label="Edit">✎</button></div>
       <div class="sbar"><i class="${over?'over':''}" style="width:${Math.min(100,pct)}%"></i></div>
-      ${meta}
+      ${meta}${sav}
       <div class="edit-box" id="edit${i}">
-        <input type="number" inputmode="decimal" min="0" step="0.01" id="bud${i}" placeholder="Bajet bulanan (RM)" value="${bud||''}">
-        <button class="ok" onclick="saveBudget(${i})">Simpan</button>
-        ${bud?`<button class="del" onclick="deleteBudget(${i})">Padam</button>`:''}
+        <div class="edit-row"><label>Nama</label><input id="nm${i}" value="${esc(sub)}" maxlength="30"></div>
+        <div class="edit-row"><label>Bajet (RM)</label><input type="number" inputmode="decimal" min="0" step="0.01" id="bud${i}" placeholder="0.00" value="${bud||''}"></div>
+        <div class="edit-actions"><button class="ok" onclick="saveSub(${i})">Simpan</button>${bud?`<button class="ghost" onclick="deleteBudget(${i})">Padam bajet</button>`:''}<button class="del" onclick="deleteSub(${i})">Padam sub</button></div>
       </div></div>`;
   }).join("");
+  const orphan=sumOf(expenses.filter(r=>!c.subs.includes(r.note)));
+  if(orphan>0)html+=`<div class="orphan">Subkategori yang telah dipadam: ${money(orphan)} (masih dikira dalam jumlah kategori)</div>`;
+  html+=`<div class="add-sub"><input id="newSub" maxlength="30" placeholder="Subkategori baharu"><button onclick="addSub()">+ Tambah</button></div>`;
+  document.getElementById("modalItems").innerHTML=html;
   document.getElementById("categoryModal").classList.add("show");
 }
-function toggleEdit(i){const e=document.getElementById("edit"+i);e.classList.toggle("show");if(e.classList.contains("show"))document.getElementById("bud"+i).focus()}
-function saveBudget(i){
-  const sub=categories[currentCat].subs[i];
-  const v=Number(document.getElementById("bud"+i).value);
-  if(!(v>0)){toast("Masukkan nilai bajet lebih daripada 0, atau tekan Padam.");return}
-  state.budgets[bKey(currentCat,sub)]=v;save();toast("Bajet "+sub+" disimpan.");renderAll();openCategory(currentCat);
+function toggleEdit(i){const e=document.getElementById("edit"+i);e.classList.toggle("show");if(e.classList.contains("show"))document.getElementById("nm"+i).focus()}
+function validSubName(n,except){
+  if(!n){toast("Nama subkategori tidak boleh kosong.");return false}
+  if(n.includes("||")){toast("Nama mengandungi aksara tidak dibenarkan.");return false}
+  if(categories[currentCat].subs.some((x,j)=>j!==except&&x.toLowerCase()===n.toLowerCase())){toast("Subkategori itu sudah wujud.");return false}
+  return true;
+}
+function refreshCat(){save();renderAll();openCategory(currentCat)}
+function saveSub(i){
+  const subs=categories[currentCat].subs, old=subs[i];
+  const nn=document.getElementById("nm"+i).value.trim();
+  const raw=document.getElementById("bud"+i).value.trim();
+  if(!validSubName(nn,i))return;
+  if(raw!==""&&!(Number(raw)>=0)){toast("Nilai bajet tidak sah.");return}
+  const v=Number(raw);
+  delete state.budgets[bKey(currentCat,old)];
+  if(nn!==old){
+    subs[i]=nn;
+    state.records.forEach(r=>{if(r.category===currentCat&&r.note===old)r.note=nn});
+  }
+  if(raw!==""&&v>0)state.budgets[bKey(currentCat,nn)]=v;
+  toast("Disimpan: "+nn);refreshCat();
 }
 function deleteBudget(i){
   const sub=categories[currentCat].subs[i];
   if(!confirm("Padam bajet untuk "+sub+"?"))return;
-  delete state.budgets[bKey(currentCat,sub)];save();toast("Bajet "+sub+" dipadam.");renderAll();openCategory(currentCat);
+  delete state.budgets[bKey(currentCat,sub)];toast("Bajet "+sub+" dipadam.");refreshCat();
+}
+function deleteSub(i){
+  const sub=categories[currentCat].subs[i];
+  const n=state.records.filter(r=>r.category===currentCat&&r.note===sub).length;
+  let msg='Padam subkategori "'+sub+'"?';
+  if(n)msg+="\n\n"+n+" rekod lama kekal disimpan dan masih dikira dalam jumlah kategori, tetapi tidak lagi dipaparkan di bawah subkategori ini.";
+  if(currentCat==="Simpanan"&&savBalance(sub)!==0)msg+="\n\nBaki simpanan "+money(savBalance(sub))+" tidak lagi dipaparkan per akaun.";
+  if(!confirm(msg))return;
+  categories[currentCat].subs.splice(i,1);
+  delete state.budgets[bKey(currentCat,sub)];
+  toast("Subkategori dipadam.");refreshCat();
+}
+function addSub(){
+  const inp=document.getElementById("newSub"), n=inp.value.trim();
+  if(!validSubName(n,-1))return;
+  categories[currentCat].subs.push(n);
+  toast("Subkategori ditambah: "+n);refreshCat();
 }
 function closeModal(){document.getElementById("categoryModal").classList.remove("show")}
 function addRecord(){
-  const type=document.getElementById("recordType").value, catRaw=document.getElementById("recordCategory").value;const [category,subSel]=catRaw.split("||");
+  const uiType=document.getElementById("recordType").value, catRaw=document.getElementById("recordCategory").value;
+  if(!catRaw){toast("Pilih kategori dahulu.");return}
+  const [category,subSel]=catRaw.split("||");
   const noteTxt=document.getElementById("recordNote").value.trim(), amount=Number(document.getElementById("recordAmount").value);
   const date=document.getElementById("recordDate").value;
-  if(!amount||amount<0||!date){toast("Sila lengkapkan jumlah dan tarikh.");return}
+  if(!(amount>0)||!date){toast("Sila lengkapkan jumlah dan tarikh.");return}
+  let type=uiType;
+  if(uiType==="saving")type="expense";
+  if(uiType==="withdraw"){const bal=savBalance(subSel);if(amount>bal+0.001){toast("Baki "+subSel+" hanya "+money(bal)+".");return}}
   state.records.push({id:Date.now(),type,category,note:subSel||category,detail:noteTxt,amount,date});save();
   document.getElementById("recordNote").value="";document.getElementById("recordAmount").value="";
-  toast("Rekod berjaya disimpan.");renderAll();
+  toast(uiType==="saving"?"Simpanan direkod.":uiType==="withdraw"?"Pengeluaran simpanan direkod.":"Rekod berjaya disimpan.");renderAll();
 }
 function populateCategories(){
-  const sel=document.getElementById("recordCategory");sel.innerHTML="";
-  Object.entries(categories).forEach(([name,c])=>{const g=document.createElement("optgroup");g.label=c.icon+" "+name;c.subs.forEach(s=>{const o=document.createElement("option");o.value=name+"||"+s;o.textContent=s;g.appendChild(o)});sel.appendChild(g)});
-  const income=document.createElement("option");income.value="Gaji Bersih";income.textContent="💰 Gaji Bersih";sel.appendChild(income);
+  const type=document.getElementById("recordType").value;
+  const sel=document.getElementById("recordCategory"), prev=sel.value;
+  const lab=document.getElementById("catLabel"), note=document.getElementById("recordNote");
+  sel.innerHTML="";
+  if(type==="income"){
+    const o=document.createElement("option");o.value="Gaji Bersih";o.textContent="💰 Gaji Bersih";sel.appendChild(o);
+    lab.textContent="Kategori";note.placeholder="Contoh: Gaji / bonus";
+  }else if(type==="saving"||type==="withdraw"){
+    (categories["Simpanan"]?categories["Simpanan"].subs:[]).forEach(sub=>{
+      const o=document.createElement("option");o.value="Simpanan||"+sub;
+      o.textContent=type==="withdraw"?sub+" (baki "+money(savBalance(sub))+")":sub;sel.appendChild(o);
+    });
+    lab.textContent=type==="saving"?"Simpan ke akaun":"Keluar dari akaun";
+    note.placeholder=type==="saving"?"Contoh: Simpanan bulan Oktober":"Sebab keluar, contoh: Kecemasan kereta";
+  }else{
+    Object.entries(categories).forEach(([name,c])=>{
+      if(name==="Simpanan")return;
+      const g=document.createElement("optgroup");g.label=c.icon+" "+name;
+      c.subs.forEach(sub=>{const o=document.createElement("option");o.value=name+"||"+sub;o.textContent=sub;g.appendChild(o)});
+      sel.appendChild(g);
+    });
+    lab.textContent="Kategori";note.placeholder="Contoh: Bahan basah / bil elektrik";
+  }
+  if([...sel.options].some(o=>o.value===prev))sel.value=prev;
 }
 function addMaintenance(){
   const note=document.getElementById("maintNote").value.trim(), amount=Number(document.getElementById("maintAmount").value);
