@@ -90,6 +90,32 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
 .orphan{font-size:12px;color:var(--muted);padding:10px 0}
 .sav-card{display:flex;align-items:center;gap:12px;cursor:pointer}
 .sav-card .cat-icon{width:44px;height:44px}
+
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-title{font-weight:800;font-size:16px;text-align:center}
+.cal-nav{background:#f1f1f6;border-radius:50%;width:36px;height:36px;font-size:18px;line-height:1}
+.cal-today{display:block;margin:2px auto 0;font-size:11px;color:var(--primary);font-weight:800;background:none;padding:2px 8px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:10px;color:var(--muted);text-align:center;font-weight:700;padding:2px 0 4px}
+.cal-day{aspect-ratio:1/1;max-height:60px;border-radius:12px;background:#f7f7fb;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:13px;font-weight:700;color:var(--text);padding:0;-webkit-tap-highlight-color:transparent}
+.cal-day.blank{background:none;pointer-events:none}
+.cal-day.has{background:#eeecff}
+.cal-day.today{box-shadow:inset 0 0 0 2px var(--primary)}
+.cal-day.sel{background:var(--primary);color:#fff}
+.dots{display:flex;gap:2px;height:5px}
+.dots i{width:5px;height:5px;border-radius:50%}
+.cal-day.sel .dots i{box-shadow:0 0 0 1px #fff}
+.legend2{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:12px;font-size:10.5px;color:var(--muted)}
+.legend2 i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 2px 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;background:#fff;border:1px solid var(--line);border-radius:99px;padding:8px 13px;font-size:12px;font-weight:700;color:var(--muted)}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.chip small{opacity:.75;margin-left:5px;font-weight:700}
+.day-head{display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:var(--muted);padding:14px 0 0}
+.day-head:first-of-type{padding-top:2px}
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;align-items:center}
+.pill{font-size:11px;font-weight:800;border-radius:99px;padding:4px 9px;background:#f4f4f9}
 @media(min-width:481px){body{padding:15px 0}.app{border-radius:24px;overflow:hidden;box-shadow:0 15px 50px rgba(30,30,60,.08)}}
 </style>
 </head>
@@ -151,7 +177,9 @@ header{padding:22px 18px 12px;display:flex;justify-content:space-between;align-i
     <label>Tarikh</label><input id="recordDate" type="date">
     <button class="add-btn" onclick="addRecord()">Simpan Rekod</button>
   </div>
-  <div class="section-title"><h3>Rekod Bulan Dipilih</h3></div>
+  <div class="section-title"><h3 id="recTitle">Rekod Bulan Dipilih</h3><span class="link" id="clearFilter" onclick="clearRecFilter()" style="display:none">Kosongkan penapis</span></div>
+  <div class="card" id="recCal"></div>
+  <div class="chips" id="recChips"></div>
   <div class="card" id="allRecords"></div>
 </section>
 
@@ -230,10 +258,11 @@ let currentCat=null;
 let selectedMonth = new Date().getMonth();
 let selectedYear = new Date().getFullYear();
 
+function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function money(n){return "RM " + Number(n||0).toLocaleString("ms-MY",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function save(){localStorage.setItem("familyBudgetData",JSON.stringify(state))}
 function monthName(i){return ["Januari","Februari","Mac","April","Mei","Jun","Julai","Ogos","September","Oktober","November","Disember"][i]}
-function monthYearKey(date){const d=new Date(date);return d.getMonth()===selectedMonth && d.getFullYear()===selectedYear}
+function monthYearKey(date){const p=String(date).split("-");return Number(p[1])-1===selectedMonth && Number(p[0])===selectedYear}
 function currentExpenses(){return state.records.filter(r=>r.type==="expense" && monthYearKey(r.date))}
 function totalSpent(){return currentExpenses().reduce((s,r)=>s+Number(r.amount),0)}
 function currentSalary(){return Number(state.salary)||0}
@@ -293,7 +322,7 @@ function recordHtml(r){
 function renderRecords(){
   const arr=state.records.filter(r=>monthYearKey(r.date)).sort((a,b)=>b.date.localeCompare(a.date));
   document.getElementById("recentRecords").innerHTML=arr.length?arr.slice(0,5).map(recordHtml).join(""):`<div class="empty">Belum ada rekod untuk bulan ini.</div>`;
-  document.getElementById("allRecords").innerHTML=arr.length?arr.map(recordHtml).join(""):`<div class="empty">Belum ada rekod.</div>`;
+  renderRecordsPage();
 }
 function bKey(cat,sub){return cat+"||"+sub}
 function getBudget(cat,sub){return Number(state.budgets[bKey(cat,sub)])||0}
@@ -311,6 +340,53 @@ function renderSavings(){
   const depM=sumOf(currentExpenses().filter(r=>r.category==="Simpanan"));
   const wdM=sumOf(state.records.filter(r=>r.type==="withdraw"&&monthYearKey(r.date)));
   document.getElementById("savingsCard").innerHTML=`<div class="cat-icon">🏦</div><div style="flex:1"><div class="mini-note">Jumlah simpanan</div><div style="font-size:19px;font-weight:800">${money(dep-wdAll)}</div></div><div class="sub-amt">Bulan ini<br><b style="color:#1f9c68">+${money(depM)}</b>${wdM?'<br><b style="color:var(--orange)">−'+money(wdM)+'</b>':''}</div>`;
+}
+
+let recFilter="all", calSel=null;
+const KINDS={expense:{l:"Belanja",c:"#6c63ff"},saving:{l:"Simpan",c:"#28b67a"},withdraw:{l:"Keluar simpanan",c:"#f4a340"},income:{l:"Pendapatan",c:"#4c9aff"}};
+function recKind(r){return r.type==="income"?"income":r.type==="withdraw"?"withdraw":(r.category==="Simpanan"?"saving":"expense")}
+function monthPrefix(){return selectedYear+"-"+String(selectedMonth+1).padStart(2,"0")}
+function calNav(d){selectedMonth+=d;if(selectedMonth<0){selectedMonth=11;selectedYear--}if(selectedMonth>11){selectedMonth=0;selectedYear++}calSel=null;renderAll()}
+function calToday(){const t=new Date();selectedMonth=t.getMonth();selectedYear=t.getFullYear();calSel=todayStr();renderAll()}
+function pickDay(ds){calSel=calSel===ds?null:ds;renderRecordsPage()}
+function setChip(k){recFilter=k;renderRecordsPage()}
+function clearRecFilter(){calSel=null;recFilter="all";renderRecordsPage()}
+function renderRecordsPage(){
+  const pre=monthPrefix();
+  if(calSel&&calSel.slice(0,7)!==pre)calSel=null;
+  const all=state.records.filter(r=>r.date&&r.date.slice(0,7)===pre);
+  const byChip=recFilter==="all"?all:all.filter(r=>recKind(r)===recFilter);
+  // kalendar
+  const first=new Date(selectedYear,selectedMonth,1).getDay(), dim=new Date(selectedYear,selectedMonth+1,0).getDate(), today=todayStr();
+  let g="";["Ahd","Isn","Sel","Rab","Kha","Jum","Sab"].forEach(d=>g+=`<div class="cal-dow">${d}</div>`);
+  for(let i=0;i<first;i++)g+='<div class="cal-day blank"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=pre+"-"+String(d).padStart(2,"0");
+    const kinds=new Set(byChip.filter(r=>r.date===ds).map(recKind));
+    const dots=Object.keys(KINDS).filter(k=>kinds.has(k)).map(k=>`<i style="background:${KINDS[k].c}"></i>`).join("");
+    g+=`<button class="cal-day ${kinds.size?"has":""} ${ds===today?"today":""} ${ds===calSel?"sel":""}" onclick="pickDay('${ds}')">${d}<span class="dots">${dots}</span></button>`;
+  }
+  const legend=Object.values(KINDS).map(k=>`<span><i style="background:${k.c}"></i>${k.l}</span>`).join("");
+  document.getElementById("recCal").innerHTML=`<div class="cal-head"><button class="cal-nav" onclick="calNav(-1)" aria-label="Bulan sebelum">‹</button><div><div class="cal-title">${monthName(selectedMonth)} ${selectedYear}</div><button class="cal-today" onclick="calToday()">Hari ini</button></div><button class="cal-nav" onclick="calNav(1)" aria-label="Bulan seterusnya">›</button></div><div class="cal-grid">${g}</div><div class="legend2">${legend}</div>`;
+  // chip
+  const chips=[["all","Semua",all.length]].concat(Object.keys(KINDS).map(k=>[k,KINDS[k].l,all.filter(r=>recKind(r)===k).length]));
+  document.getElementById("recChips").innerHTML=chips.map(([k,l,n])=>`<button class="chip ${recFilter===k?"on":""}" onclick="setChip('${k}')">${l}<small>${n}</small></button>`).join("");
+  // senarai
+  const shown=(calSel?byChip.filter(r=>r.date===calSel):byChip).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  document.getElementById("recTitle").textContent=calSel?"Rekod "+fmtDate(calSel):"Rekod Bulan Dipilih";
+  document.getElementById("clearFilter").style.display=(calSel||recFilter!=="all")?"inline":"none";
+  if(!shown.length){document.getElementById("allRecords").innerHTML=`<div class="empty">${all.length?"Tiada rekod untuk penapis ini.":"Belum ada rekod bulan ini."}</div>`;return}
+  const pills=Object.keys(KINDS).map(k=>[k,sumOf(shown.filter(r=>recKind(r)===k))]).filter(x=>x[1]>0).map(([k,v])=>`<span class="pill" style="color:${KINDS[k].c}">${KINDS[k].l} ${money(v)}</span>`).join("");
+  let html=`<div class="pills"><span class="pill">${shown.length} rekod</span>${pills}</div>`, cur="";
+  shown.forEach(r=>{
+    if(r.date!==cur){
+      cur=r.date;
+      const dayExp=sumOf(shown.filter(x=>x.date===cur&&recKind(x)==="expense"));
+      html+=`<div class="day-head"><span>${new Date(cur+"T00:00:00").toLocaleDateString("ms-MY",{weekday:"short",day:"numeric",month:"short"})}</span><span>${dayExp?"Belanja "+money(dayExp):""}</span></div>`;
+    }
+    html+=recordHtml(r);
+  });
+  document.getElementById("allRecords").innerHTML=html;
 }
 function openCategory(name){
   currentCat=name;
@@ -441,13 +517,13 @@ function populateCategories(){
 function addMaintenance(){
   const note=document.getElementById("maintNote").value.trim(), amount=Number(document.getElementById("maintAmount").value);
   if(!note||!amount){toast("Sila lengkapkan maklumat.");return}
-  state.maintenance.push({note,amount,date:new Date().toISOString().slice(0,10)});save();document.getElementById("maintNote").value="";document.getElementById("maintAmount").value="";toast("Maintenance disimpan.");renderAll();
+  state.maintenance.push({note,amount,date:todayStr()});save();document.getElementById("maintNote").value="";document.getElementById("maintAmount").value="";toast("Maintenance disimpan.");renderAll();
 }
 function renderMaintenance(){document.getElementById("maintenanceList").innerHTML=state.maintenance.length?state.maintenance.slice().reverse().map(x=>`<div class="record"><div class="cat-icon">🔧</div><div class="rtext"><b>${x.note}</b><small>${fmtDate(x.date)}</small></div><div class="amount">${money(x.amount)}</div></div>`).join(""):`<div class="empty">Tiada rekod maintenance.</div>`}
 function addHealth(){
   const note=document.getElementById("healthNote").value.trim(), amount=Number(document.getElementById("healthAmount").value);
   if(!note||!amount){toast("Sila lengkapkan maklumat.");return}
-  state.health.push({note,amount,date:new Date().toISOString().slice(0,10)});save();document.getElementById("healthNote").value="";document.getElementById("healthAmount").value="";toast("Rekod health disimpan.");renderAll();
+  state.health.push({note,amount,date:todayStr()});save();document.getElementById("healthNote").value="";document.getElementById("healthAmount").value="";toast("Rekod health disimpan.");renderAll();
 }
 function renderHealth(){document.getElementById("healthList").innerHTML=state.health.length?state.health.slice().reverse().map(x=>`<div class="record"><div class="cat-icon">❤️</div><div class="rtext"><b>${x.note}</b><small>${fmtDate(x.date)}</small></div><div class="amount">${money(x.amount)}</div></div>`).join(""):`<div class="empty">Tiada rekod health.</div>`}
 function saveSalary(){const v=Number(document.getElementById("salaryInput").value);if(v<0){toast("Nilai tidak sah.");return}state.salary=v;save();toast("Gaji bersih dikemaskini.");renderAll()}
@@ -458,7 +534,7 @@ function showPage(id){document.querySelectorAll(".page").forEach(p=>p.classList.
 function toast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200)}
 function exportData(){const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="family-budget-backup.json";a.click();URL.revokeObjectURL(a.href)}
 function resetData(){if(confirm("Padam semua rekod dan tetapkan semula sistem?")){localStorage.removeItem("familyBudgetData");location.reload()}}
-document.getElementById("recordDate").value=new Date().toISOString().slice(0,10);
+document.getElementById("recordDate").value=todayStr();
 populatePeriods();populateCategories();renderAll();
 if(sessionStorage.getItem("budgetLogged")==="1")document.getElementById("login").style.display="none";
 document.getElementById("passwordInput").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
